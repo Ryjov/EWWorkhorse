@@ -1,7 +1,11 @@
+using DocumentFormat.OpenXml.Packaging;
 using EWeb.Models;
+using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Mvc;
+using RabbitMQ.Client;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Channels;
 
 namespace EWeb.Controllers
 {
@@ -9,6 +13,7 @@ namespace EWeb.Controllers
     {
         private readonly ILogger<HomeController> _logger;
         IWebHostEnvironment _appEnvironment;
+        CancellationToken _cancellationToken;
 
         public HomeController(ILogger<HomeController> logger)
         {
@@ -25,38 +30,43 @@ namespace EWeb.Controllers
         {
             ConnectionFactory factory = new();
             factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:5672");// add appsettings
-            factory.ClientProvidedName = "Rabbit sender app";
+            factory.ClientProvidedName = "EW filebytes sender app";
 
-            IConnection cnn = factory.CreateConnection();
-            IModel channel = cnn.CreateModel();
+            var cnn = await factory.CreateConnectionAsync();
+            var channel = await cnn.CreateChannelAsync();
 
-            string exchangeName = "DemoExchange";
-            string routingKey = "demo-routing-key";
-            string queueName = "DemoQueue";
-            
-            channel.ExchangeDeclare(exchangeName, ExchangeType.Direct);
-            channel.QueueDeclare(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
-            channel.QueueBind(queueName, exchangeName, routingKey, arguments: null);
+            string exchangeName = "EWExchange";
+            string routingKey = "ew-routing-key";
+            string queueName = "EWFileQueue";
+
+            channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Direct);
+            channel.QueueDeclareAsync(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
+            channel.QueueBindAsync(queueName, exchangeName, routingKey, arguments: null);
 
             byte[] wordBytes;
             byte[] excDoc;
-            
+
             foreach (var uploadedFile in uploadedFiles)
             {
-                if (uploadedFile.class == WordProcessingDocument)
+                if (uploadedFile.ContentType == "")
                 {
-                    wordBytes = uploadedFile.ReadAllBytes(uploadedFile.File);
+                    using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
+                    {
+                        var s = await reader.ReadToEndAsync();
+                    }
                 }
-                else if (uploadedFile.class == SpreadsheetDocument)
+                else if (uploadedFile.ContentType == "")
                 {
-                    Workbook wb = new Workbook();
-                    excDoc = uploadedFile.File;
+                    using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
+                    {
+                        excDoc = await reader.ReadToEndAsync();
+                    }
                 }
             }
-            
-            channel.BasicPublish(exchangeName, routingKey, basicProperties: null, wordBytes);
-            channel.BasicPublish(exchangeName, routingKey, basicProperties: null, excDoc);
-            
+
+            await channel.BasicPublishAsync(exchangeName, routingKey, true, null, wordBytes, _cancellationToken);
+            await channel.BasicPublishAsync(exchangeName, routingKey, true, null, excDoc, _cancellationToken);
+
             return RedirectToAction("Index");
         }
 
