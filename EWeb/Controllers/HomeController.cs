@@ -23,11 +23,39 @@ namespace EWeb.Controllers
         [HttpPost]
         public async Task<IActionResult> AddFile(IFormFileCollection uploadedFiles)
         {
+            ConnectionFactory factory = new();
+            factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:5672");// add appsettings
+            factory.ClientProvidedName = "Rabbit sender app";
+
+            IConnection cnn = factory.CreateConnection();
+            IModel channel = cnn.CreateModel();
+
+            string exchangeName = "DemoExchange";
+            string routingKey = "demo-routing-key";
+            string queueName = "DemoQueue";
+            
+            channel.ExchangeDeclare(exchangeName, ExchangeType.Direct);
+            channel.QueueDeclare(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
+            channel.QueueBind(queueName, exchangeName, routingKey, arguments: null);
+
+            byte[] wordBytes;
+            byte[] excDoc;
+            
             foreach (var uploadedFile in uploadedFiles)
             {
-                
+                if (uploadedFile.class == WordProcessingDocument)
+                {
+                    wordBytes = uploadedFile.ReadAllBytes(uploadedFile.File);
+                }
+                else if (uploadedFile.class == SpreadsheetDocument)
+                {
+                    Workbook wb = new Workbook();
+                    excDoc = uploadedFile.File;
+                }
             }
-
+            
+            channel.BasicPublish(exchangeName, routingKey, basicProperties: null, wordBytes);
+            channel.BasicPublish(exchangeName, routingKey, basicProperties: null, excDoc);
             
             return RedirectToAction("Index");
         }
