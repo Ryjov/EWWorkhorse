@@ -1,0 +1,25 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - ExcelToWord</title>
+    <!--<link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />-->
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body>
+    <div id="header">
+        <h1>Excel-To-Word</h1>
+        <div id="navigation">
+            <ul class="nav">
+                <li><!--<a href="">Главная</a>-->@Html.ActionLink("Главная", "Index", "Home")</li>
+            </ul>
+        </div>
+    </div>
+    <div id="container">
+        @RenderBody()
+    </div>
+    <div id="footer">
+    </div>
+</body>
+</html>

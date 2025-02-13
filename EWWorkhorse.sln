@@ -5,6 +5,8 @@ VisualStudioVersion = 17.9.34622.214
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EWWorkhorse", "EWWorkhorse\EWWorkhorse.csproj", "{BB607760-6C03-4E44-B8E4-CD078B885C08}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EWeb", "EWeb\EWeb.csproj", "{F59F9C9E-5B86-425C-B1DD-4E02ABFCCD82}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{BB607760-6C03-4E44-B8E4-CD078B885C08}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BB607760-6C03-4E44-B8E4-CD078B885C08}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BB607760-6C03-4E44-B8E4-CD078B885C08}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F59F9C9E-5B86-425C-B1DD-4E02ABFCCD82}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F59F9C9E-5B86-425C-B1DD-4E02ABFCCD82}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F59F9C9E-5B86-425C-B1DD-4E02ABFCCD82}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F59F9C9E-5B86-425C-B1DD-4E02ABFCCD82}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
