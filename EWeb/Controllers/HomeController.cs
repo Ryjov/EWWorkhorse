@@ -29,7 +29,7 @@ namespace EWeb.Controllers
         public async Task<IActionResult> AddFile(IFormFileCollection uploadedFiles)
         {
             ConnectionFactory factory = new();
-            factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:5672");// add appsettings
+            factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:1011");// add appsettings
             factory.ClientProvidedName = "EW filebytes sender app";
 
             var cnn = await factory.CreateConnectionAsync();
@@ -43,8 +43,8 @@ namespace EWeb.Controllers
             channel.QueueDeclareAsync(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
             channel.QueueBindAsync(queueName, exchangeName, routingKey, arguments: null);
 
-            byte[] wordBytes;
-            byte[] excDoc;
+            byte[] wordBytes = default(byte[]);
+            byte[] excDoc = default(byte[]);
 
             foreach (var uploadedFile in uploadedFiles)
             {
@@ -52,20 +52,28 @@ namespace EWeb.Controllers
                 {
                     using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
                     {
-                        var s = await reader.ReadToEndAsync();
+                        using (var mem = new MemoryStream())
+                        {
+                            reader.BaseStream.CopyTo(mem);
+                            excDoc = mem.ToArray();
+                        }
                     }
                 }
                 else if (uploadedFile.ContentType == "")
                 {
                     using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
                     {
-                        excDoc = await reader.ReadToEndAsync();
+                        using (var mem = new MemoryStream())
+                        {
+                            reader.BaseStream.CopyTo(mem);
+                            excDoc = mem.ToArray();
+                        }
                     }
                 }
             }
 
-            await channel.BasicPublishAsync(exchangeName, routingKey, true, null, wordBytes, _cancellationToken);
-            await channel.BasicPublishAsync(exchangeName, routingKey, true, null, excDoc, _cancellationToken);
+            await channel.BasicPublishAsync(exchangeName, routingKey, true, wordBytes, _cancellationToken);
+            await channel.BasicPublishAsync(exchangeName, routingKey, true, excDoc, _cancellationToken);
 
             return RedirectToAction("Index");
         }
