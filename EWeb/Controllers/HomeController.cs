@@ -48,18 +48,18 @@ namespace EWeb.Controllers
 
             foreach (var uploadedFile in uploadedFiles)
             {
-                if (uploadedFile.ContentType == "")
+                if (uploadedFile.ContentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
                 {
                     using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
                     {
                         using (var mem = new MemoryStream())
                         {
                             reader.BaseStream.CopyTo(mem);
-                            excDoc = mem.ToArray();
+                            wordBytes = mem.ToArray();
                         }
                     }
                 }
-                else if (uploadedFile.ContentType == "")
+                else if (uploadedFile.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 {
                     using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
                     {
@@ -72,7 +72,8 @@ namespace EWeb.Controllers
                 }
             }
 
-            await channel.BasicPublishAsync(exchangeName, routingKey, true, wordBytes, _cancellationToken);
+            //var fileBatch = channel.CreateBasicPublishBatch();
+            await channel.BasicPublishAsync(exchangeName, routingKey, true, wordBytes, _cancellationToken);// need to roll into one?
             await channel.BasicPublishAsync(exchangeName, routingKey, true, excDoc, _cancellationToken);
 
             return RedirectToAction("Index");

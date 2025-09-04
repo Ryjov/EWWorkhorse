@@ -1,6 +1,10 @@
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+using System.Collections;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace EWWorkhorse
@@ -16,15 +20,90 @@ namespace EWWorkhorse
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            while (!stoppingToken.IsCancellationRequested)
+            ConnectionFactory factory = new();
+            factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:1011");
+            factory.ClientProvidedName = "Rabbit receiver app";
+
+            try
             {
-                if (_logger.IsEnabled(LogLevel.Information))
+                var cnn = await factory.CreateConnectionAsync();
+                var channel = await cnn.CreateChannelAsync();
+
+                string exchangeName = "EWExchange";
+                string routingKey = "ew-routing-key";
+                string queueName = "EWFileQueue";
+
+                await channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Direct);
+                await channel.QueueDeclareAsync(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
+                await channel.QueueBindAsync(queueName, exchangeName, routingKey, arguments: null);
+                await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 2, global: false);
+
+                var consumer = new AsyncEventingBasicConsumer(channel);
+                while (!stoppingToken.IsCancellationRequested)
                 {
-                    _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+                    if (_logger.IsEnabled(LogLevel.Information))
+                    {
+                        _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+                    }
+                    await Task.Delay(5000, stoppingToken);
+
+                    var wordBody = default(byte[]);
+                    var excelBody = default(byte[]);
+
+                    consumer.ReceivedAsync += async (sender, args) =>
+                    {
+                        if (args.DeliveryTag % 2 == 0)
+                            excelBody = args.Body.ToArray();
+                        else
+                            wordBody = args.Body.ToArray();
+
+                        Console.WriteLine("Message Received. Delivery tag: " + args.DeliveryTag);
+
+                        // todo: add Replace
+
+                        await channel.BasicAckAsync(args.DeliveryTag, multiple: true);
+
+                        if (wordBody != null && excelBody != null)
+                        {
+                            try
+                            {
+                                using (MemoryStream excelMeme = new MemoryStream())
+                                using (MemoryStream wordMeme = new MemoryStream())
+                                {
+                                    wordMeme.Write(wordBody, 0, (int)wordBody.Length);
+                                    WordprocessingDocument wordDoc = WordprocessingDocument.Open(wordMeme, true);
+
+                                    excelMeme.Write(excelBody, 0, (int)excelBody.Length);
+                                    SpreadsheetDocument excDoc = SpreadsheetDocument.Open(excelMeme, true);
+
+                                    var result = await Replace(wordDoc, excDoc);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("Unexpected error: " + ex.Message);
+                            }
+                            finally
+                            {
+                                wordBody = default(byte[]);
+                                excelBody = default(byte[]);
+                            }
+                        }
+                    };
+
+                    string consumerTag = await channel.BasicConsumeAsync(queueName, autoAck: false, consumer);
+
+                    Console.ReadLine();
+
+                    await channel.BasicCancelAsync(consumerTag);
+
+                    await channel.CloseAsync();
+                    await cnn.CloseAsync();
                 }
-                await Task.Delay(1000, stoppingToken);
-                
-                // todo: add Replace
+            }
+            catch (Exception ex)
+            {
+                string s = ex.Message;
             }
         }
 
