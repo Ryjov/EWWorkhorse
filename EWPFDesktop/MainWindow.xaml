@@ -1,0 +1,41 @@
+﻿<Window x:Class="ExcelToWord.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:ExcelToWord"
+        mc:Ignorable="d"
+        Title="ExcelToWord" Height="450" Width="800"
+        Background="#333"
+        >
+    <Window.Resources>
+        <Style x:Key="PathButton">
+            <Setter Property="Control.Margin" Value="5px"/>
+            <Setter Property="ItemsControl.Background" Value="#ffa500"/>
+        </Style>
+        <Style x:Key="PathToFile">
+            <Setter Property="ItemsControl.Margin" Value="5px"/>
+            <Setter Property="ItemsControl.VerticalContentAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="3*"></ColumnDefinition>
+            <ColumnDefinition Width="7*"></ColumnDefinition>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"></RowDefinition>
+            <RowDefinition Height="*"></RowDefinition>
+            <RowDefinition Height="2*"></RowDefinition>
+            <RowDefinition Height="3*"></RowDefinition>
+        </Grid.RowDefinitions>
+        <Button x:Name="wordpathbutton" Grid.Column="0" Grid.Row="0" Content="Выберите Word-файл" Click="wordpathbutton_Click" Style="{StaticResource PathButton}"></Button>
+        <Button x:Name="excelpathbutton" Grid.Column="0" Grid.Row="1" Content="Выберите Excel-файл" Click="excelpathbutton_Click" Style="{StaticResource PathButton}"></Button>
+        <Button x:Name="executebutton" IsEnabled="False" Grid.Row="2" Height="35" VerticalAlignment="Top" Grid.ColumnSpan="1" Content="Выполнить обработку" Click="executebutton_Click" Style="{StaticResource PathButton}"></Button>
+        <TextBox x:Name="wordpath" Grid.Column="1" Grid.Row="0" Style="{StaticResource PathToFile}" IsReadOnly="True"></TextBox>
+        <TextBox x:Name="excelpath" Grid.Column="1" Grid.Row="1" Style="{StaticResource PathToFile}" IsReadOnly="True"></TextBox>
+        <Border Margin="5px" Background="White" BorderBrush="#333" BorderThickness="1" Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="2" Visibility="Hidden">
+            <TextBox x:Name="eventlog" IsEnabled="False" Visibility="Hidden"></TextBox>
+        </Border>
+    </Grid>
+</Window>

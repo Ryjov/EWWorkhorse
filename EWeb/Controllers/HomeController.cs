@@ -3,6 +3,7 @@ using EWeb.Models;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Mvc;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Channels;
@@ -77,6 +78,39 @@ namespace EWeb.Controllers
             await channel.BasicPublishAsync(exchangeName, routingKey, true, excDoc, _cancellationToken);
 
             return RedirectToAction("Index");
+        }
+
+        [HttpGet]
+        public async Task<FileStreamResult> GetResult()
+        {
+            ConnectionFactory factory = new();
+            factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:1011");
+            factory.ClientProvidedName = "Rabbit receiver app";
+
+
+            var cnn = await factory.CreateConnectionAsync();
+            var channel = await cnn.CreateChannelAsync();
+
+            string exchangeName = "EWExchange";
+            string routingKey = "ew-routing-key";
+            string queueName = "EWFileQueue";
+
+            await channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Direct);
+            await channel.QueueDeclareAsync(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
+            await channel.QueueBindAsync(queueName, exchangeName, routingKey, arguments: null);
+            await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 2, global: false);
+
+            var consumer = new AsyncEventingBasicConsumer(channel);
+            while (!_cancellationToken.IsCancellationRequested)
+            {
+                consumer.ReceivedAsync += async (sender, args) =>
+                {
+                    await channel.BasicAckAsync(args.DeliveryTag, multiple: true);
+                    var wordBody = args.Body.ToArray();
+
+                    return
+                };
+            }
         }
 
         public IActionResult Privacy()

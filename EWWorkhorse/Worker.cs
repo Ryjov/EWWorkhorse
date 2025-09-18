@@ -6,12 +6,14 @@ using RabbitMQ.Client.Events;
 using System.Collections;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace EWWorkhorse
 {
     public class Worker : BackgroundService
     {
         private readonly ILogger<Worker> _logger;
+        CancellationToken _cancellationToken;
 
         public Worker(ILogger<Worker> logger)
         {
@@ -59,8 +61,6 @@ namespace EWWorkhorse
 
                         Console.WriteLine("Message Received. Delivery tag: " + args.DeliveryTag);
 
-                        // todo: add Replace
-
                         await channel.BasicAckAsync(args.DeliveryTag, multiple: true);
 
                         if (wordBody != null && excelBody != null)
@@ -77,6 +77,7 @@ namespace EWWorkhorse
                                     SpreadsheetDocument excDoc = SpreadsheetDocument.Open(excelMeme, true);
 
                                     var result = await Replace(wordDoc, excDoc);
+                                    SendToQueue(result, stoppingToken);
                                 }
                             }
                             catch (Exception ex)
@@ -155,6 +156,37 @@ namespace EWWorkhorse
 
             wdoc.Save();
             return wdoc;
+        }
+
+        public async Task SendToQueue(WordprocessingDocument doc, CancellationToken stoppingToken)
+        {
+            ConnectionFactory factory = new();
+            factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:1011");
+            factory.ClientProvidedName = "EW resultbytes sender";
+
+            var cnn = await factory.CreateConnectionAsync();
+            var channel = await cnn.CreateChannelAsync();
+
+            string exchangeName = "EWExchange";
+            string routingKey = "ew-routing-key";
+            string queueName = "EWResultQueue";
+
+            await channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Direct);
+            await channel.QueueDeclareAsync(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
+            await channel.QueueBindAsync(queueName, exchangeName, routingKey, arguments: null);
+
+            var wordBytes = default(byte[]);
+            using (StreamReader sr = new StreamReader(doc.MainDocumentPart.GetStream()))
+            {
+                var w = await sr.ReadToEndAsync();
+                using (var memstream = new MemoryStream())
+                {
+                    sr.BaseStream.CopyTo(memstream);
+                    wordBytes = memstream.ToArray();
+                }
+            }
+
+            await channel.BasicPublishAsync(exchangeName, routingKey, true, wordBytes, stoppingToken);
         }
     }
 }
