@@ -81,7 +81,7 @@ namespace EWeb.Controllers
         }
 
         [HttpGet]
-        public async Task<FileStreamResult> GetResult()
+        public async Task GetResult()//FileStreamResult
         {
             ConnectionFactory factory = new();
             factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:1011");
@@ -107,8 +107,6 @@ namespace EWeb.Controllers
                 {
                     await channel.BasicAckAsync(args.DeliveryTag, multiple: true);
                     var wordBody = args.Body.ToArray();
-
-                    return
                 };
             }
         }

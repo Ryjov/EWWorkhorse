@@ -2,6 +2,7 @@
 using RabbitMQ.Client;
 using System;
 using System.IO;
+using System.Net;
 using System.Threading;
 using System.Windows;
 using System.Windows.Shapes;
@@ -50,14 +51,14 @@ namespace ExcelToWord
             }
         }
 
-        public async Task executebutton_Click(object sender, RoutedEventArgs e)
+        public void executebutton_Click(object sender, RoutedEventArgs e)
         {
             ConnectionFactory factory = new();
             factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:1011");// add appsettings
             factory.ClientProvidedName = "EW filebytes sender app";
 
-            var cnn = await factory.CreateConnectionAsync();
-            var channel = await cnn.CreateChannelAsync();
+            var cnn = factory.CreateConnectionAsync().Result;
+            var channel = cnn.CreateChannelAsync().Result;
 
             string exchangeName = "EWPFExchange";
             string routingKey = "ew-routing-key";
@@ -89,8 +90,15 @@ namespace ExcelToWord
             }
 
             //var fileBatch = channel.CreateBasicPublishBatch();
-            await channel.BasicPublishAsync(exchangeName, routingKey, true, wordBytes, _cancellationToken);// need to roll into one?
-            await channel.BasicPublishAsync(exchangeName, routingKey, true, excDoc, _cancellationToken);
+            channel.BasicPublishAsync(exchangeName, routingKey, true, wordBytes, _cancellationToken);// need to roll into one?
+            channel.BasicPublishAsync(exchangeName, routingKey, true, excDoc, _cancellationToken);
+
+            using (WebClient wc = new WebClient())
+            {
+                //wc.DownloadProgressChanged += wc_DownloadProgressChanged;
+                wc.DownloadFileAsync(new System.Uri("http://url"),
+                 "Result location");
+            }
         }
 
         public void checkTextbox(bool checkVariable)
