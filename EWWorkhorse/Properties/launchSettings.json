@@ -4,6 +4,8 @@
     "EWWorkhorse": {
       "commandName": "Project",
       "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7240;http://localhost:5075",
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development"
       }

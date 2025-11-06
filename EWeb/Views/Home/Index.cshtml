@@ -1,19 +1,12 @@
 ﻿@{
-    ViewData["Title"] = "Главная";
+    ViewData["Title"] = "Main";
 }
 <div id="main">
     <form asp-action="AddFile" asp-controller="Home" enctype="multipart/form-data">
-        <h3>Выберите файл Word</h3>
+        <h3>Choose Word-file</h3>
         <input type="file" name="uploadedFiles" accept=".doc, .docx" /><br>
-        <h3>Выберите файл Excel</h3>
+        <h3>Choose Excel-file</h3>
         <input type="file" name="uploadedFiles" accept=".xlsx,.xls" /><br>
-        <input id="merge_button" type="submit" value="Загрузить" />
-    </form>
-</div>
-
-<div id="results">
-    <form asp-action="GetResult" asp-controller="Home">
-        <h3>Обработанные файлы</h3>
-
+        <input id="merge_button" type="submit" value="Execute" />
     </form>
 </div>

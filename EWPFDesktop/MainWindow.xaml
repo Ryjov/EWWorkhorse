@@ -9,9 +9,20 @@
         Background="#333"
         >
     <Window.Resources>
-        <Style x:Key="PathButton">
+        <Style x:Key="PathWordButton">
             <Setter Property="Control.Margin" Value="5px"/>
-            <Setter Property="ItemsControl.Background" Value="#ffa500"/>
+            <Setter Property="ItemsControl.Background" Value="#2b579a"/>
+            <Setter Property="ItemsControl.Foreground" Value="White"/>
+        </Style>
+        <Style x:Key="PathExcelButton">
+            <Setter Property="Control.Margin" Value="5px"/>
+            <Setter Property="ItemsControl.Background" Value="#217346"/>
+            <Setter Property="ItemsControl.Foreground" Value="White"/>
+        </Style>
+        <Style x:Key="ExecutionButton">
+            <Setter Property="Control.Margin" Value="5px"/>
+            <Setter Property="ItemsControl.Background" Value="#217346"/>
+            <Setter Property="ItemsControl.Foreground" Value="White"/>
         </Style>
         <Style x:Key="PathToFile">
             <Setter Property="ItemsControl.Margin" Value="5px"/>
@@ -29,9 +40,9 @@
             <RowDefinition Height="2*"></RowDefinition>
             <RowDefinition Height="3*"></RowDefinition>
         </Grid.RowDefinitions>
-        <Button x:Name="wordpathbutton" Grid.Column="0" Grid.Row="0" Content="Выберите Word-файл" Click="wordpathbutton_Click" Style="{StaticResource PathButton}"></Button>
-        <Button x:Name="excelpathbutton" Grid.Column="0" Grid.Row="1" Content="Выберите Excel-файл" Click="excelpathbutton_Click" Style="{StaticResource PathButton}"></Button>
-        <Button x:Name="executebutton" IsEnabled="False" Grid.Row="2" Height="35" VerticalAlignment="Top" Grid.ColumnSpan="1" Content="Выполнить обработку" Click="executebutton_Click" Style="{StaticResource PathButton}"></Button>
+        <Button x:Name="wordpathbutton" Grid.Column="0" Grid.Row="0" Content="Choose Word File" Click="wordpathbutton_Click" Style="{StaticResource PathWordButton}"></Button>
+        <Button x:Name="excelpathbutton" Grid.Column="0" Grid.Row="1" Content="Choose Excel File" Click="excelpathbutton_Click" Style="{StaticResource PathExcelButton}"></Button>
+        <Button x:Name="executebutton" IsEnabled="False" Grid.Row="2" Height="35" VerticalAlignment="Top" Grid.ColumnSpan="1" Content="Start Conversion" Click="executebutton_Click" Style="{StaticResource ExecutionButton}"></Button>
         <TextBox x:Name="wordpath" Grid.Column="1" Grid.Row="0" Style="{StaticResource PathToFile}" IsReadOnly="True"></TextBox>
         <TextBox x:Name="excelpath" Grid.Column="1" Grid.Row="1" Style="{StaticResource PathToFile}" IsReadOnly="True"></TextBox>
         <Border Margin="5px" Background="White" BorderBrush="#333" BorderThickness="1" Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="2" Visibility="Hidden">

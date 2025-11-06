@@ -1,4 +1,5 @@
-﻿using Microsoft.Win32;
+﻿using EWeb.RPC;
+using Microsoft.Win32;
 using RabbitMQ.Client;
 using System;
 using System.IO;
@@ -6,6 +7,7 @@ using System.Net;
 using System.Threading;
 using System.Windows;
 using System.Windows.Shapes;
+using static System.Net.WebRequestMethods;
 
 namespace ExcelToWord
 {
@@ -51,25 +53,13 @@ namespace ExcelToWord
             }
         }
 
-        public void executebutton_Click(object sender, RoutedEventArgs e)
+        public async void executebutton_Click(object sender, RoutedEventArgs e)
         {
-            ConnectionFactory factory = new();
-            factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:1011");// add appsettings
-            factory.ClientProvidedName = "EW filebytes sender app";
-
-            var cnn = factory.CreateConnectionAsync().Result;
-            var channel = cnn.CreateChannelAsync().Result;
-
-            string exchangeName = "EWPFExchange";
-            string routingKey = "ew-routing-key";
-            string queueName = "EWFileQueue";
-
-            channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Direct);
-            channel.QueueDeclareAsync(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
-            channel.QueueBindAsync(queueName, exchangeName, routingKey, arguments: null);
+            var rpcClient = new RPCClient();
+            await rpcClient.StartAsync();
 
             byte[] wordBytes = default(byte[]);
-            byte[] excDoc = default(byte[]);
+            byte[] excBytes = default(byte[]);
 
             using (StreamReader sr = new StreamReader(wordpath.Text))
             {
@@ -85,20 +75,11 @@ namespace ExcelToWord
                 using (var mem = new MemoryStream())
                 {
                     sr.BaseStream.CopyTo(mem);
-                    excDoc = mem.ToArray();
+                    excBytes = mem.ToArray();
                 }
             }
 
-            //var fileBatch = channel.CreateBasicPublishBatch();
-            channel.BasicPublishAsync(exchangeName, routingKey, true, wordBytes, _cancellationToken);// need to roll into one?
-            channel.BasicPublishAsync(exchangeName, routingKey, true, excDoc, _cancellationToken);
-
-            using (WebClient wc = new WebClient())
-            {
-                //wc.DownloadProgressChanged += wc_DownloadProgressChanged;
-                wc.DownloadFileAsync(new System.Uri("http://url"),
-                 "Result location");
-            }
+            await rpcClient.CallAsync(wordBytes, excBytes);
         }
 
         public void checkTextbox(bool checkVariable)

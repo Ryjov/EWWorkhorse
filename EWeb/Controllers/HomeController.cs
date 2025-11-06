@@ -1,11 +1,14 @@
 using DocumentFormat.OpenXml.Packaging;
 using EWeb.Models;
+using EWeb.RPC;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Mvc;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
+using System.Text;
 using System.Threading.Channels;
 
 namespace EWeb.Controllers
@@ -29,55 +32,30 @@ namespace EWeb.Controllers
         [HttpPost]
         public async Task<IActionResult> AddFile(IFormFileCollection uploadedFiles)
         {
-            ConnectionFactory factory = new();
-            factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:1011");// add appsettings
-            factory.ClientProvidedName = "EW filebytes sender app";
+            var file = await InvokeAsync(uploadedFiles);
 
-            var cnn = await factory.CreateConnectionAsync();
-            var channel = await cnn.CreateChannelAsync();
-
-            string exchangeName = "EWExchange";
-            string routingKey = "ew-routing-key";
-            string queueName = "EWFileQueue";
-
-            channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Direct);
-            channel.QueueDeclareAsync(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
-            channel.QueueBindAsync(queueName, exchangeName, routingKey, arguments: null);
-
-            byte[] wordBytes = default(byte[]);
-            byte[] excDoc = default(byte[]);
-
-            foreach (var uploadedFile in uploadedFiles)
+            using (var memStream = new MemoryStream())
             {
-                if (uploadedFile.ContentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-                {
-                    using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
-                    {
-                        using (var mem = new MemoryStream())
-                        {
-                            reader.BaseStream.CopyTo(mem);
-                            wordBytes = mem.ToArray();
-                        }
-                    }
-                }
-                else if (uploadedFile.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                {
-                    using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
-                    {
-                        using (var mem = new MemoryStream())
-                        {
-                            reader.BaseStream.CopyTo(mem);
-                            excDoc = mem.ToArray();
-                        }
-                    }
-                }
+                WordprocessingDocument wordDoc = WordprocessingDocument.Create(memStream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document);
+                wordDoc.AddMainDocumentPart();
+
+                //get the main part of the document which contains CustomXMLParts
+                MainDocumentPart mainPart = wordDoc.MainDocumentPart;
+
+                //delete all CustomXMLParts in the document. If needed only specific CustomXMLParts can be deleted using the CustomXmlParts IEnumerable
+                mainPart.DeleteParts<CustomXmlPart>(mainPart.CustomXmlParts);
+
+                byte[] buf = (new UTF8Encoding()).GetBytes(file);
+                memStream.Write(buf, 0, buf.Length);
+                //add new CustomXMLPart with data from new XML file
+                CustomXmlPart myXmlPart = mainPart.AddCustomXmlPart(CustomXmlPartType.CustomXml);
+                myXmlPart.FeedData(memStream);
+
+                wordDoc.Save();
+                var result = memStream.ToArray();
+
+                return File(result, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "result.docx");
             }
-
-            //var fileBatch = channel.CreateBasicPublishBatch();
-            await channel.BasicPublishAsync(exchangeName, routingKey, true, wordBytes, _cancellationToken);// need to roll into one?
-            await channel.BasicPublishAsync(exchangeName, routingKey, true, excDoc, _cancellationToken);
-
-            return RedirectToAction("Index");
         }
 
         [HttpGet]
@@ -120,6 +98,15 @@ namespace EWeb.Controllers
         public IActionResult Error()
         {
             return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+        }
+
+        private static async Task<string> InvokeAsync(IFormFileCollection files)
+        {
+            var rpcClient = new RPCClient();
+            await rpcClient.StartAsync();
+            var resultFile = await rpcClient.CallAsync(files);
+
+            return resultFile;
         }
     }
 }
