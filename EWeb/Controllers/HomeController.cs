@@ -1,8 +1,10 @@
 using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
 using EWeb.Models;
 using EWeb.RPC;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Diagnostics;
@@ -10,6 +12,8 @@ using System.IO;
 using System.Net;
 using System.Text;
 using System.Threading.Channels;
+using System.Xml;
+using System.Xml.Serialization;
 
 namespace EWeb.Controllers
 {
@@ -33,29 +37,25 @@ namespace EWeb.Controllers
         public async Task<IActionResult> AddFile(IFormFileCollection uploadedFiles)
         {
             var file = await InvokeAsync(uploadedFiles);
+            var beginningTagLength = 1348;
+            var endingTagLength = 22;
+            file = file.Substring(1348, file.Length - beginningTagLength - endingTagLength);
 
-            using (var memStream = new MemoryStream())
+            var stream = new MemoryStream();
+            using (WordprocessingDocument doc = WordprocessingDocument.Create(stream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document, true))
             {
-                WordprocessingDocument wordDoc = WordprocessingDocument.Create(memStream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document);
-                wordDoc.AddMainDocumentPart();
+                MainDocumentPart mainPart = doc.AddMainDocumentPart();
 
-                //get the main part of the document which contains CustomXMLParts
-                MainDocumentPart mainPart = wordDoc.MainDocumentPart;
+                new Document(new Body()).Save(mainPart);
 
-                //delete all CustomXMLParts in the document. If needed only specific CustomXMLParts can be deleted using the CustomXmlParts IEnumerable
-                mainPart.DeleteParts<CustomXmlPart>(mainPart.CustomXmlParts);
+                Body body = mainPart.Document.Body;
+                body.InnerXml = file;
 
-                byte[] buf = (new UTF8Encoding()).GetBytes(file);
-                memStream.Write(buf, 0, buf.Length);
-                //add new CustomXMLPart with data from new XML file
-                CustomXmlPart myXmlPart = mainPart.AddCustomXmlPart(CustomXmlPartType.CustomXml);
-                myXmlPart.FeedData(memStream);
-
-                wordDoc.Save();
-                var result = memStream.ToArray();
-
-                return File(result, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "result.docx");
+                mainPart.Document.Save();
             }
+            stream.Seek(0, SeekOrigin.Begin);
+
+            return File(stream, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "result.docx");
         }
 
         [HttpGet]
