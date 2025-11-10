@@ -1,5 +1,6 @@
 ﻿using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
+using DocumentFormat.OpenXml.Wordprocessing;
 using Google.Protobuf;
 using System;
 using System.Collections;
@@ -8,6 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Text = DocumentFormat.OpenXml.Wordprocessing.Text;
 
 namespace EWWorkhorse
 {
@@ -80,46 +82,37 @@ namespace EWWorkhorse
 
         public static WordprocessingDocument ReplaceFile(WordprocessingDocument wdoc, SpreadsheetDocument excDoc)
         {
-            var wordBody = wdoc.MainDocumentPart.Document.Body;
-            var paragraphs = wordBody.Elements<DocumentFormat.OpenXml.Wordprocessing.Paragraph>();
+            var document = wdoc.MainDocumentPart.Document;
             Regex markerRegEx = new Regex(@"<#\d+#[A-Z]+\d+>");
 
-            foreach (var paragraph in paragraphs)
+            foreach (var text in document.Descendants<Text>())
             {
-                foreach (var run in paragraph.Elements<DocumentFormat.OpenXml.Wordprocessing.Run>())
+                foreach (Match match in markerRegEx.Matches(text.Text))
                 {
-                    foreach (var text in run.Elements<DocumentFormat.OpenXml.Wordprocessing.Text>())
+                    Regex sheetRegEx = new Regex(@"#\d+#");
+                    Regex cellRegEx = new Regex(@"#[A-Z]+\d+>");
+                    int sheetIndex = Int32.Parse(sheetRegEx.Match(match.Value).Value.Trim('#'));
+                    string cellIndex = cellRegEx.Match(match.Value).Value.Trim('#', '>');
+                    WorkbookPart wbPart = excDoc.WorkbookPart;
+                    Sheet theSheet = wbPart.Workbook.Descendants<Sheet>().FirstOrDefault(s => s.SheetId == sheetIndex);
+                    WorksheetPart wsPart = (WorksheetPart)(wbPart.GetPartById(theSheet.Id));
+                    Cell cell = wsPart.Worksheet.Descendants<Cell>().FirstOrDefault(c => c.CellReference == cellIndex);
+
+                    var value = cell.InnerText;
+
+                    if (cell.DataType is not null)
                     {
-                        MatchCollection markerMatches = markerRegEx.Matches(text.Text);
-
-                        foreach (Match match in markerMatches)
+                        if (cell.DataType.Value == CellValues.SharedString)
                         {
-                            Regex sheetRegEx = new Regex(@"#\d+#");
-                            Regex cellRegEx = new Regex(@"#[A-Z]+\d+>");
-                            int sheetIndex = Int32.Parse(sheetRegEx.Match(match.Value).Value.Trim('#'));
-                            string cellIndex = cellRegEx.Match(match.Value).Value.Trim('#', '>');
-                            WorkbookPart wbPart = excDoc.WorkbookPart;
-                            Sheet theSheet = wbPart.Workbook.Descendants<Sheet>().FirstOrDefault(s => s.SheetId == sheetIndex);
-                            WorksheetPart wsPart = (WorksheetPart)(wbPart.GetPartById(theSheet.Id));
-                            Cell cell = wsPart.Worksheet.Descendants<Cell>().FirstOrDefault(c => c.CellReference == cellIndex);
+                            var stringTable = wbPart.GetPartsOfType<SharedStringTablePart>().FirstOrDefault();
+                            value = stringTable.SharedStringTable.ElementAt(int.Parse(value)).InnerText;
 
-                            var value = cell.InnerText;
-
-                            if (cell.DataType is not null)
-                            {
-                                if (cell.DataType.Value == CellValues.SharedString)
-                                {
-                                    var stringTable = wbPart.GetPartsOfType<SharedStringTablePart>().FirstOrDefault();
-                                    value = stringTable.SharedStringTable.ElementAt(int.Parse(value)).InnerText;
-
-                                    text.Text = text.Text.Replace(match.Value, value);
-                                }
-                            }
-                            else
-                            {
-                                text.Text = text.Text.Replace(match.Value, value);
-                            }
+                            text.Text = text.Text.Replace(match.Value, value);
                         }
+                    }
+                    else
+                    {
+                        text.Text = text.Text.Replace(match.Value, value);
                     }
                 }
             }

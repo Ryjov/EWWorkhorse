@@ -36,7 +36,6 @@ namespace EWWorkhorse
                 string routingKey = "ew-routing-key";
 
                 await channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Direct);
-                //await channel.ExchangeDeclareAsync(string.Empty, ExchangeType.Direct);
                 await channel.QueueDeclareAsync(_queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
                 await channel.QueueBindAsync(_queueName, exchangeName, routingKey, arguments: null);
                 await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 2, global: false);
@@ -48,7 +47,6 @@ namespace EWWorkhorse
                     {
                         _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
                     }
-                    //await Task.Delay(5000, stoppingToken);
 
                     var wordBody = default(byte[]);
                     var excelBody = default(byte[]);
@@ -85,7 +83,6 @@ namespace EWWorkhorse
                                     var wordBytes = default(byte[]);
                                     using (StreamReader sr = new StreamReader(result.MainDocumentPart.GetStream()))
                                     {
-                                        //var w = await sr.ReadToEndAsync();
                                         using (var memstream = new MemoryStream())
                                         {
                                             sr.BaseStream.CopyTo(memstream);

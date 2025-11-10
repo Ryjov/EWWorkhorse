@@ -19,8 +19,4 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
     <PackageReference Include="RabbitMQ.Client" Version="7.1.0-alpha.0" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Protobuf Include="RPC\Protos\exchange.proto" GrpcServices="Server" />
-  </ItemGroup>
 </Project>
