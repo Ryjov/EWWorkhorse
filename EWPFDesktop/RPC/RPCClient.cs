@@ -1,4 +1,5 @@
-﻿using RabbitMQ.Client;
+﻿using Microsoft.AspNetCore.Http;
+using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Collections.Concurrent;
 using System.IO;
@@ -6,7 +7,7 @@ using System.Net;
 using System.Text;
 using System.Threading;
 
-namespace EWeb.RPC
+namespace EWPFDesktop.RPC
 {
     public class RPCClient
     {
@@ -27,24 +28,22 @@ namespace EWeb.RPC
             _connection = await factory.CreateConnectionAsync();
             _channel = await _connection.CreateChannelAsync();
 
-            //string exchangeName = "EWExchange";
-            //string routingKey = "ew-routing-key";
-
-            //callback queue
             var queueDeclareResult = await _channel.QueueDeclareAsync();
             _replyQueueName = queueDeclareResult.QueueName;
             var replyConsumer = new AsyncEventingBasicConsumer(_channel);
 
             replyConsumer.ReceivedAsync += (model, ea) =>
             {
+                var result = default(byte[]);
+
                 string? correlationId = ea.BasicProperties.CorrelationId;
 
                 if (false == string.IsNullOrEmpty(correlationId))
                 {
                     if (_callbackMapper.TryRemove(correlationId, out var tcs))
                     {
-                        var body = ea.Body.ToArray();
-                        var response = Encoding.UTF8.GetString(body);
+                        result = ea.Body.ToArray();
+                        var response = Encoding.UTF8.GetString(result);
                         tcs.TrySetResult(response);
                     }
                 }
@@ -53,13 +52,9 @@ namespace EWeb.RPC
             };
 
             var res = await _channel.BasicConsumeAsync(_replyQueueName, true, replyConsumer);
-
-            //_channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Direct);
-            //_channel.QueueDeclareAsync(_queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
-            //_channel.QueueBindAsync(_queueName, exchangeName, routingKey, arguments: null);
         }
 
-        public async Task<string> CallAsync(byte[] wordBytes, byte[] excBytes, CancellationToken cancellationToken = default)
+        public async Task<string> CallAsync(IFormFileCollection files, CancellationToken cancellationToken = default)
         {
             if (_channel is null)
             {
@@ -77,33 +72,38 @@ namespace EWeb.RPC
                     TaskCreationOptions.RunContinuationsAsynchronously);
             _callbackMapper.TryAdd(correlationId, tcs);
 
-            ConnectionFactory factory = new();
-            factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:1011");// add appsettings
-            factory.ClientProvidedName = "EW filebytes sender app";
+            byte[] wordBytes = default(byte[]);
+            byte[] excDoc = default(byte[]);
 
-            var cnn = factory.CreateConnectionAsync().Result;
-            var channel = cnn.CreateChannelAsync().Result;
-
-            string exchangeName = "EWPFExchange";
-            string routingKey = "ew-routing-key";
-            string queueName = "EWFileQueue";
-
-            channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Direct);
-            channel.QueueDeclareAsync(queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
-            channel.QueueBindAsync(queueName, exchangeName, routingKey, arguments: null);
-
-            
+            foreach (var uploadedFile in files)
+            {
+                if (uploadedFile.ContentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                {
+                    using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
+                    {
+                        using (var mem = new MemoryStream())
+                        {
+                            reader.BaseStream.CopyTo(mem);
+                            wordBytes = mem.ToArray();
+                        }
+                    }
+                }
+                else if (uploadedFile.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                {
+                    using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
+                    {
+                        using (var mem = new MemoryStream())
+                        {
+                            reader.BaseStream.CopyTo(mem);
+                            excDoc = mem.ToArray();
+                        }
+                    }
+                }
+            }
 
             //var fileBatch = channel.CreateBasicPublishBatch();
-            channel.BasicPublishAsync(exchangeName, routingKey, true, wordBytes, cancellationToken);// need to roll into one?
-            channel.BasicPublishAsync(exchangeName, routingKey, true, excBytes, cancellationToken);
-
-            using (WebClient wc = new WebClient())
-            {
-                //wc.DownloadProgressChanged += wc_DownloadProgressChanged;
-                wc.DownloadFileAsync(new System.Uri("http://url"),
-                 "Result location");
-            }
+            await _channel.BasicPublishAsync(string.Empty, _queueName, true, props, wordBytes);// need to roll into one?
+            await _channel.BasicPublishAsync(string.Empty, _queueName, true, props, excDoc);
 
             using CancellationTokenRegistration ctr =
             cancellationToken.Register(() =>

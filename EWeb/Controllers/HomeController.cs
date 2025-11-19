@@ -34,17 +34,12 @@ namespace EWeb.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> AddFile(IFormFileCollection uploadedFiles)
+        public async Task<IActionResult> ExecuteMerge(IFormFileCollection uploadedFiles)
         {
             var stream = new MemoryStream();
             await Executor.ExecuteAsync(uploadedFiles, stream);
 
             return File(stream, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "result.docx");
-        }
-
-        public IActionResult Privacy()
-        {
-            return View();
         }
 
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]

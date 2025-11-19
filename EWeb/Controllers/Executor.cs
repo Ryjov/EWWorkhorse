@@ -5,11 +5,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace EWeb.Controllers
 {
-    public static class Executor
+    internal static class Executor
     {
-        public static async Task ExecuteAsync(IFormFileCollection uploadedFiles, MemoryStream stream)
+        internal static async Task ExecuteAsync(IFormFileCollection uploadedFiles, MemoryStream stream)
         {
             var file = await InvokeRPCAsync(uploadedFiles);
+
             var beginningTagLength = 1348;
             var endingTagLength = 22;
             file = file.Substring(1348, file.Length - beginningTagLength - endingTagLength);

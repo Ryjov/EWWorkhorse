@@ -1,4 +1,5 @@
-﻿using EWeb.RPC;
+﻿using EWPFDesktop;
+using EWPFDesktop.RPC;
 using Microsoft.Win32;
 using RabbitMQ.Client;
 using System;
@@ -25,7 +26,6 @@ namespace ExcelToWord
         bool availabilityTotal = false;
         OpenFileDialog ofd = new OpenFileDialog();
         CancellationToken _cancellationToken;
-        //Forms.FolderBrowserDialog fbd = new Forms.FolderBrowserDialog();
 
         public string wordpathfolder = " ";//лучше сохранять в папку экселя
         public string excelpathfolder = " ";
@@ -55,9 +55,6 @@ namespace ExcelToWord
 
         public async void executebutton_Click(object sender, RoutedEventArgs e)
         {
-            var rpcClient = new RPCClient();
-            await rpcClient.StartAsync();
-
             byte[] wordBytes = default(byte[]);
             byte[] excBytes = default(byte[]);
 
@@ -79,7 +76,9 @@ namespace ExcelToWord
                 }
             }
 
-            await rpcClient.CallAsync(wordBytes, excBytes);
+            var stream = new MemoryStream();
+
+            await Executor.ExecuteAsync(wordBytes, excBytes, stream);
         }
 
         public void checkTextbox(bool checkVariable)

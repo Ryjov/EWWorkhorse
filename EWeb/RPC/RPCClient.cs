@@ -25,10 +25,6 @@ namespace EWeb.RPC
             _connection = await factory.CreateConnectionAsync();
             _channel = await _connection.CreateChannelAsync();
 
-            //string exchangeName = "EWExchange";
-            //string routingKey = "ew-routing-key";
-
-            //callback queue
             var queueDeclareResult = await _channel.QueueDeclareAsync();
             _replyQueueName = queueDeclareResult.QueueName;
             var replyConsumer = new AsyncEventingBasicConsumer(_channel);
@@ -53,10 +49,6 @@ namespace EWeb.RPC
             };
 
             var res = await _channel.BasicConsumeAsync(_replyQueueName, true, replyConsumer);
-
-            //_channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Direct);
-            //_channel.QueueDeclareAsync(_queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
-            //_channel.QueueBindAsync(_queueName, exchangeName, routingKey, arguments: null);
         }
 
         public async Task<string> CallAsync(IFormFileCollection files, CancellationToken cancellationToken = default)
