@@ -28,6 +28,7 @@
             <Setter Property="ItemsControl.Margin" Value="5px"/>
             <Setter Property="ItemsControl.VerticalContentAlignment" Value="Center"/>
         </Style>
+
     </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
@@ -48,5 +49,24 @@
         <Border Margin="5px" Background="White" BorderBrush="#333" BorderThickness="1" Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="2" Visibility="Hidden">
             <TextBox x:Name="eventlog" IsEnabled="False" Visibility="Hidden"></TextBox>
         </Border>
+        <Grid x:Name="RadioGrid" Grid.Row="2" Grid.Column="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="4*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="1*"/>
+                <RowDefinition Height="1*"/>
+                <RowDefinition Height="1*"/>
+                <RowDefinition Height="3*"/>
+            </Grid.RowDefinitions>
+            <TextBlock Grid.RowSpan="4" Foreground="White" Text="Save to:"/>
+            <RadioButton Foreground="LightBlue" GroupName="outfile" Content="Word template folder" Grid.Column="1" Grid.Row="0" x:Name="WordRadio"/>
+            <RadioButton Foreground="LightGreen" GroupName="outfile" Content="Excel template folder" Grid.Column="1" Grid.Row="1" IsChecked="True" x:Name="ExcelRadio"/>
+            <RadioButton Foreground="White" GroupName="outfile" Content="Custom destination:" Grid.Column="1" Grid.Row="2" x:Name="PathRadio" Checked="PathRadioChecked" Unchecked="PathRadioUnchecked"/>
+            <Button x:Name="OutfilePathButton" Content="Выбрать папку" Grid.Column="2" Grid.Row="3" Width="100" Height="20" VerticalAlignment="Top" Click="OutfilePathButton_Click" Style="{StaticResource PathWordButton}"/>
+            <TextBox x:Name="OutfilePathText" Background="White" Grid.Column="2" Grid.Row="2" IsEnabled="False" Height="20" VerticalAlignment="Top"/>
+        </Grid>
     </Grid>
 </Window>

@@ -25,6 +25,7 @@ namespace ExcelToWord
         bool availabilityBottom = false;
         bool availabilityTotal = false;
         OpenFileDialog ofd = new OpenFileDialog();
+        OpenFolderDialog fbd = new OpenFolderDialog();
         CancellationToken _cancellationToken;
 
         public string wordpathfolder = " ";//лучше сохранять в папку экселя
@@ -55,30 +56,36 @@ namespace ExcelToWord
 
         public async void executebutton_Click(object sender, RoutedEventArgs e)
         {
-            byte[] wordBytes = default(byte[]);
-            byte[] excBytes = default(byte[]);
+            byte[] wordBytes = default;
+            byte[] excBytes = default;
 
-            using (StreamReader sr = new StreamReader(wordpath.Text))
-            {
-                using (var mem = new MemoryStream())
-                {
-                    sr.BaseStream.CopyTo(mem);
-                    wordBytes = mem.ToArray();
-                }
-            }
-
-            using (StreamReader sr = new StreamReader(excelpath.Text))
-            {
-                using (var mem = new MemoryStream())
-                {
-                    sr.BaseStream.CopyTo(mem);
-                    excBytes = mem.ToArray();
-                }
-            }
+            Executor.ReadFileBytes(ref wordBytes, wordpath.Text);
+            Executor.ReadFileBytes(ref excBytes, excelpath.Text);
 
             var stream = new MemoryStream();
 
-            await Executor.ExecuteAsync(wordBytes, excBytes, stream);
+            try
+            {
+                var result = await Executor.ExecuteAsync(wordBytes, excBytes, stream);
+
+                if (ExcelRadio.IsChecked == true)
+                {
+                    System.IO.File.WriteAllBytes($@"{excelpathfolder}\out_file.docx", stream.ToArray());
+                }
+                else if (WordRadio.IsChecked == true)
+                {
+                    System.IO.File.WriteAllBytes($@"{wordpathfolder}\out_file.docx", stream.ToArray());
+                }
+                else if ((PathRadio.IsChecked == true) && (!(String.IsNullOrEmpty(OutfilePathText.Text))))
+                {
+                    System.IO.File.WriteAllBytes($@"{OutfilePathText.Text}\out_file.docx", stream.ToArray());
+                }
+                MessageBox.Show("Обработка успешно завершена");
+            }
+            catch
+            {
+                MessageBox.Show("Во время работы программы произошла ошибка. Файлы не были обработаны");
+            }
         }
 
         public void checkTextbox(bool checkVariable)
@@ -90,6 +97,26 @@ namespace ExcelToWord
             else
             {
                 executebutton.IsEnabled = false;
+            }
+        }
+
+        public void PathRadioChecked(object sender, RoutedEventArgs e)
+        {
+            OutfilePathText.IsEnabled = true;
+        }
+
+        public void PathRadioUnchecked(object sender, RoutedEventArgs e)
+        {
+            OutfilePathText.IsEnabled = false;
+        }
+
+        private void OutfilePathButton_Click(object sender, RoutedEventArgs e)
+        {
+            PathRadio.IsChecked = true;
+            OutfilePathText.IsEnabled = true;
+            if (fbd.ShowDialog() == true)
+            {
+                OutfilePathText.Text = fbd.FolderName;
             }
         }
     }

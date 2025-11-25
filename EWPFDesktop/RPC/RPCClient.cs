@@ -54,7 +54,7 @@ namespace EWPFDesktop.RPC
             var res = await _channel.BasicConsumeAsync(_replyQueueName, true, replyConsumer);
         }
 
-        public async Task<string> CallAsync(IFormFileCollection files, CancellationToken cancellationToken = default)
+        public async Task<string> CallAsync(byte[] wordBytes, byte[] excelBytes, CancellationToken cancellationToken = default)
         {
             if (_channel is null)
             {
@@ -72,38 +72,9 @@ namespace EWPFDesktop.RPC
                     TaskCreationOptions.RunContinuationsAsynchronously);
             _callbackMapper.TryAdd(correlationId, tcs);
 
-            byte[] wordBytes = default(byte[]);
-            byte[] excDoc = default(byte[]);
-
-            foreach (var uploadedFile in files)
-            {
-                if (uploadedFile.ContentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-                {
-                    using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
-                    {
-                        using (var mem = new MemoryStream())
-                        {
-                            reader.BaseStream.CopyTo(mem);
-                            wordBytes = mem.ToArray();
-                        }
-                    }
-                }
-                else if (uploadedFile.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                {
-                    using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
-                    {
-                        using (var mem = new MemoryStream())
-                        {
-                            reader.BaseStream.CopyTo(mem);
-                            excDoc = mem.ToArray();
-                        }
-                    }
-                }
-            }
-
             //var fileBatch = channel.CreateBasicPublishBatch();
             await _channel.BasicPublishAsync(string.Empty, _queueName, true, props, wordBytes);// need to roll into one?
-            await _channel.BasicPublishAsync(string.Empty, _queueName, true, props, excDoc);
+            await _channel.BasicPublishAsync(string.Empty, _queueName, true, props, excelBytes);
 
             using CancellationTokenRegistration ctr =
             cancellationToken.Register(() =>
