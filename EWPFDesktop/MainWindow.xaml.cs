@@ -8,7 +8,6 @@ using System.Net;
 using System.Threading;
 using System.Windows;
 using System.Windows.Shapes;
-using static System.Net.WebRequestMethods;
 
 namespace ExcelToWord
 {
@@ -56,30 +55,20 @@ namespace ExcelToWord
 
         public async void executebutton_Click(object sender, RoutedEventArgs e)
         {
-            byte[] wordBytes = default;
-            byte[] excBytes = default;
-
-            Executor.ReadFileBytes(ref wordBytes, wordpath.Text);
-            Executor.ReadFileBytes(ref excBytes, excelpath.Text);
-
-            var stream = new MemoryStream();
-
             try
             {
-                var result = await Executor.ExecuteAsync(wordBytes, excBytes, stream);
+                byte[] wordBytes = File.ReadAllBytes(wordpath.Text);
+                byte[] excBytes = File.ReadAllBytes(excelpath.Text);
+
+                var result = await Executor.ExecuteAsync(wordBytes, excBytes);
 
                 if (ExcelRadio.IsChecked == true)
-                {
-                    System.IO.File.WriteAllBytes($@"{excelpathfolder}\out_file.docx", stream.ToArray());
-                }
+                    File.WriteAllBytes($@"{excelpathfolder}\out_file.docx", result);
                 else if (WordRadio.IsChecked == true)
-                {
-                    System.IO.File.WriteAllBytes($@"{wordpathfolder}\out_file.docx", stream.ToArray());
-                }
+                    System.IO.File.WriteAllBytes($@"{wordpathfolder}\out_file.docx", result);
                 else if ((PathRadio.IsChecked == true) && (!(String.IsNullOrEmpty(OutfilePathText.Text))))
-                {
-                    System.IO.File.WriteAllBytes($@"{OutfilePathText.Text}\out_file.docx", stream.ToArray());
-                }
+                    System.IO.File.WriteAllBytes($@"{OutfilePathText.Text}\out_file.docx", result);
+
                 MessageBox.Show("Обработка успешно завершена");
             }
             catch

@@ -3,16 +3,13 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Net;
-using System.Text;
-using System.Threading;
 
 namespace EWPFDesktop.RPC
 {
     public class RPCClient
     {
         private readonly IConnectionFactory _connectionFactory;
-        private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _callbackMapper = new();
+        private readonly ConcurrentDictionary<string, TaskCompletionSource<byte[]>> _callbackMapper = new();
 
         const string _queueName = "EWFileQueue";
         private string? _replyQueueName;
@@ -34,17 +31,13 @@ namespace EWPFDesktop.RPC
 
             replyConsumer.ReceivedAsync += (model, ea) =>
             {
-                var result = default(byte[]);
-
                 string? correlationId = ea.BasicProperties.CorrelationId;
 
                 if (false == string.IsNullOrEmpty(correlationId))
                 {
                     if (_callbackMapper.TryRemove(correlationId, out var tcs))
                     {
-                        result = ea.Body.ToArray();
-                        var response = Encoding.UTF8.GetString(result);
-                        tcs.TrySetResult(response);
+                        tcs.TrySetResult(ea.Body.ToArray());
                     }
                 }
 
@@ -54,7 +47,7 @@ namespace EWPFDesktop.RPC
             var res = await _channel.BasicConsumeAsync(_replyQueueName, true, replyConsumer);
         }
 
-        public async Task<string> CallAsync(byte[] wordBytes, byte[] excelBytes, CancellationToken cancellationToken = default)
+        public async Task<byte[]> CallAsync(byte[] wordBytes, byte[] excelBytes, CancellationToken cancellationToken = default)
         {
             if (_channel is null)
             {
@@ -68,13 +61,12 @@ namespace EWPFDesktop.RPC
                 ReplyTo = _replyQueueName
             };
 
-            var tcs = new TaskCompletionSource<string>(
+            var tcs = new TaskCompletionSource<byte[]>(
                     TaskCreationOptions.RunContinuationsAsynchronously);
             _callbackMapper.TryAdd(correlationId, tcs);
 
-            //var fileBatch = channel.CreateBasicPublishBatch();
-            await _channel.BasicPublishAsync(string.Empty, _queueName, true, props, wordBytes);// need to roll into one?
-            await _channel.BasicPublishAsync(string.Empty, _queueName, true, props, excelBytes);
+            var envelope = BuildEnvelope(wordBytes, excelBytes);
+            await _channel.BasicPublishAsync(string.Empty, _queueName, true, props, envelope);
 
             using CancellationTokenRegistration ctr =
             cancellationToken.Register(() =>
@@ -84,6 +76,15 @@ namespace EWPFDesktop.RPC
             });
 
             return await tcs.Task;
+        }
+
+        private static byte[] BuildEnvelope(byte[] wordBytes, byte[] excelBytes)
+        {
+            using var payload = new MemoryStream();
+            payload.Write(BitConverter.GetBytes(wordBytes.Length));
+            payload.Write(wordBytes);
+            payload.Write(excelBytes);
+            return payload.ToArray();
         }
     }
 }

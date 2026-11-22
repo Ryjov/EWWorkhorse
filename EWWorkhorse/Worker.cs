@@ -38,90 +38,50 @@ namespace EWWorkhorse
                 await channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Direct);
                 await channel.QueueDeclareAsync(_queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
                 await channel.QueueBindAsync(_queueName, exchangeName, routingKey, arguments: null);
-                await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 2, global: false);
+                await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false);
 
                 var consumer = new AsyncEventingBasicConsumer(channel);
-                while (!stoppingToken.IsCancellationRequested)
+
+                consumer.ReceivedAsync += async (sender, args) =>
                 {
-                    if (_logger.IsEnabled(LogLevel.Information))
+                    Console.WriteLine("Job Received. Delivery tag: " + args.DeliveryTag);
+
+                    var props = args.BasicProperties;
+                    var replyProps = new BasicProperties { CorrelationId = props.CorrelationId };
+
+                    try
                     {
-                        _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+                        (byte[] wordBytes, byte[] excelBytes) = ParseEnvelope(args.Body.ToArray());
+                        byte[] resultBytes = Replacer.ReplaceBytes(wordBytes, excelBytes);
+                        await channel.BasicPublishAsync(string.Empty, props.ReplyTo!, true, replyProps, resultBytes);
+                        await channel.BasicAckAsync(args.DeliveryTag, multiple: false);
                     }
-
-                    var wordBody = default(byte[]);
-                    var excelBody = default(byte[]);
-
-                    consumer.ReceivedAsync += async (sender, args) =>
+                    catch (Exception ex)
                     {
-                        if (args.DeliveryTag % 2 == 0)
-                            excelBody = args.Body.ToArray();
-                        else
-                            wordBody = args.Body.ToArray();
+                        Console.WriteLine("Unexpected error: " + ex.Message);
+                        await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: false);
+                    }
+                };
 
-                        Console.WriteLine("Message Received. Delivery tag: " + args.DeliveryTag);
+                string consumerTag = await channel.BasicConsumeAsync(_queueName, false, consumer);
 
-                        IReadOnlyBasicProperties props = args.BasicProperties;
-                        var replyProps = new BasicProperties
-                        {
-                            CorrelationId = props.CorrelationId
-                        };
-
-                        if (wordBody != null && excelBody != null)
-                        {
-                            try
-                            {
-                                using (MemoryStream excelMeme = new MemoryStream())
-                                using (MemoryStream wordMeme = new MemoryStream())
-                                {
-                                    wordMeme.Write(wordBody, 0, (int)wordBody.Length);
-                                    WordprocessingDocument wordDoc = WordprocessingDocument.Open(wordMeme, true);
-
-                                    excelMeme.Write(excelBody, 0, (int)excelBody.Length);
-                                    SpreadsheetDocument excDoc = SpreadsheetDocument.Open(excelMeme, true);
-
-                                    var result = Replacer.ReplaceFile(wordDoc, excDoc);
-                                    var wordBytes = default(byte[]);
-                                    using (StreamReader sr = new StreamReader(result.MainDocumentPart.GetStream()))
-                                    {
-                                        using (var memstream = new MemoryStream())
-                                        {
-                                            sr.BaseStream.CopyTo(memstream);
-                                            wordBytes = memstream.ToArray();
-                                        }
-                                    }
-                                    await channel.BasicPublishAsync(string.Empty, props.ReplyTo!, true, replyProps, wordBytes);
-
-                                    await channel.BasicAckAsync(args.DeliveryTag, multiple: true);
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine("Unexpected error: " + ex.Message);
-                            }
-                            finally
-                            {
-                                wordBody = default(byte[]);
-                                excelBody = default(byte[]);
-                            }
-                        }
-
-                    };
-
-                    string consumerTag = await channel.BasicConsumeAsync(_queueName, false, consumer);
-
-                    Console.ReadLine();
-
-                    //??
-                    await channel.BasicCancelAsync(consumerTag);
-
+                try { await Task.Delay(Timeout.Infinite, stoppingToken); }
+                catch (OperationCanceledException) { }
+                finally
+                {
                     await channel.CloseAsync();
                     await cnn.CloseAsync();
                 }
             }
             catch (Exception ex)
             {
-                string s = ex.Message;
+                _logger.LogError(ex, "Worker failed");
             }
+        }
+        private static (byte[] wordBytes, byte[] excelBytes) ParseEnvelope(byte[] body)
+        {
+            int wordLength = BitConverter.ToInt32(body, 0);
+            return (body.AsSpan(4, wordLength).ToArray(), body[(4 + wordLength)..]);
         }
     }
 }

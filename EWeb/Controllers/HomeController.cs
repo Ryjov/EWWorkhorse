@@ -36,10 +36,9 @@ namespace EWeb.Controllers
         [HttpPost]
         public async Task<IActionResult> ExecuteMerge(IFormFileCollection uploadedFiles)
         {
-            var stream = new MemoryStream();
-            await Executor.ExecuteAsync(uploadedFiles, stream);
+            var resultBytes = await Executor.ExecuteAsync(uploadedFiles);
 
-            return File(stream, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "result.docx");
+            return File(resultBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "result.docx");
         }
 
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]

@@ -1,15 +1,13 @@
 ﻿using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Collections.Concurrent;
-using System.Text;
-using System.Threading;
 
 namespace EWeb.RPC
 {
     public class RPCClient
     {
         private readonly IConnectionFactory _connectionFactory;
-        private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _callbackMapper = new();
+        private readonly ConcurrentDictionary<string, TaskCompletionSource<byte[]>> _callbackMapper = new();
 
         const string _queueName = "EWFileQueue";
         private string? _replyQueueName;
@@ -31,17 +29,13 @@ namespace EWeb.RPC
 
             replyConsumer.ReceivedAsync += (model, ea) =>
             {
-                var result = default(byte[]);
-
                 string? correlationId = ea.BasicProperties.CorrelationId;
 
                 if (false == string.IsNullOrEmpty(correlationId))
                 {
                     if (_callbackMapper.TryRemove(correlationId, out var tcs))
                     {
-                        result = ea.Body.ToArray();
-                        var response = Encoding.UTF8.GetString(result);
-                        tcs.TrySetResult(response);
+                        tcs.TrySetResult(ea.Body.ToArray());
                     }
                 }
 
@@ -51,7 +45,7 @@ namespace EWeb.RPC
             var res = await _channel.BasicConsumeAsync(_replyQueueName, true, replyConsumer);
         }
 
-        public async Task<string> CallAsync(IFormFileCollection files, CancellationToken cancellationToken = default)
+        public async Task<byte[]> CallAsync(IFormFileCollection files, CancellationToken cancellationToken = default)
         {
             if (_channel is null)
             {
@@ -65,42 +59,32 @@ namespace EWeb.RPC
                 ReplyTo = _replyQueueName
             };
 
-            var tcs = new TaskCompletionSource<string>(
+            var tcs = new TaskCompletionSource<byte[]>(
                     TaskCreationOptions.RunContinuationsAsynchronously);
             _callbackMapper.TryAdd(correlationId, tcs);
 
-            byte[] wordBytes = default(byte[]);
-            byte[] excDoc = default(byte[]);
+            byte[] wordBytes = default;
+            byte[] excDoc = default;
 
             foreach (var uploadedFile in files)
-            {
                 if (uploadedFile.ContentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-                {
                     using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
+                    using (var mem = new MemoryStream())
                     {
-                        using (var mem = new MemoryStream())
-                        {
-                            reader.BaseStream.CopyTo(mem);
-                            wordBytes = mem.ToArray();
-                        }
+                        reader.BaseStream.CopyTo(mem);
+                        wordBytes = mem.ToArray();
                     }
-                }
                 else if (uploadedFile.ContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                {
                     using (var reader = new StreamReader(uploadedFile.OpenReadStream()))
+                    using (var mem = new MemoryStream())
                     {
-                        using (var mem = new MemoryStream())
-                        {
-                            reader.BaseStream.CopyTo(mem);
-                            excDoc = mem.ToArray();
-                        }
+                        reader.BaseStream.CopyTo(mem);
+                        excDoc = mem.ToArray();
                     }
-                }
-            }
 
-            //var fileBatch = channel.CreateBasicPublishBatch();
-            await _channel.BasicPublishAsync(string.Empty, _queueName, true, props, wordBytes);// need to roll into one?
-            await _channel.BasicPublishAsync(string.Empty, _queueName, true, props, excDoc);
+            byte[] envelope = BuildEnvelope(wordBytes, excDoc);
+
+            await _channel.BasicPublishAsync(string.Empty, _queueName, true, props, envelope);
 
             using CancellationTokenRegistration ctr =
             cancellationToken.Register(() =>
@@ -110,6 +94,15 @@ namespace EWeb.RPC
             });
 
             return await tcs.Task;
+        }
+
+        private static byte[] BuildEnvelope(byte[] wordBytes, byte[] excelBytes)
+        {
+            using var payload = new MemoryStream();
+            payload.Write(BitConverter.GetBytes(wordBytes.Length));
+            payload.Write(wordBytes);
+            payload.Write(excelBytes);
+            return payload.ToArray();
         }
     }
 }

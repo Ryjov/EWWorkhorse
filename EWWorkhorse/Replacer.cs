@@ -15,26 +15,25 @@ namespace EWWorkhorse
 {
     internal static class Replacer
     {
-        public static WordprocessingDocument ReplaceFile(byte[] wordBytes, byte[] excBytes)
+        public static byte[] ReplaceBytes(byte[] wordBytes, byte[] excBytes)
         {
-            using (MemoryStream excelMeme = new MemoryStream())
-            using (MemoryStream wordMeme = new MemoryStream())
-            {
-                excelMeme.Write(excBytes, 0, (int)excBytes.Length);
-                wordMeme.Write(wordBytes, 0, (int)wordBytes.Length);
-                using (SpreadsheetDocument excDoc = SpreadsheetDocument.Open(excelMeme, true))
-                using (WordprocessingDocument wdoc = WordprocessingDocument.Open(wordMeme, true))
-                {
-                    var result = ReplaceFile(wdoc, excDoc);
+            using var wordMeme = new MemoryStream();
+            using var excelMeme = new MemoryStream();
+            wordMeme.Write(wordBytes, 0, wordBytes.Length);
+            excelMeme.Write(excBytes, 0, excBytes.Length);
 
-                    return result;
-                }
+            using (var wdoc = WordprocessingDocument.Open(wordMeme, true))
+            using (var excDoc = SpreadsheetDocument.Open(excelMeme, true))
+            {
+                ReplaceFile(wdoc, excDoc);
             }
+
+            return wordMeme.ToArray();
         }
 
-        public static WordprocessingDocument ReplaceFile(WordprocessingDocument wdoc, SpreadsheetDocument excDoc)
+        public static WordprocessingDocument ReplaceFile(WordprocessingDocument wDoc, SpreadsheetDocument excDoc)
         {
-            var document = wdoc.MainDocumentPart.Document;
+            var document = wDoc.MainDocumentPart.Document;
             Regex markerRegEx = new Regex(@"<#\d+#[A-Z]+\d+>");
 
             foreach (var text in document.Descendants<Text>())
@@ -69,8 +68,8 @@ namespace EWWorkhorse
                 }
             }
 
-            wdoc.Save();
-            return wdoc;
+            wDoc.Save();
+            return wDoc;
         }
     }
 }
