@@ -65,9 +65,9 @@ namespace ExcelToWord
                 if (ExcelRadio.IsChecked == true)
                     File.WriteAllBytes($@"{excelpathfolder}\out_file.docx", result);
                 else if (WordRadio.IsChecked == true)
-                    System.IO.File.WriteAllBytes($@"{wordpathfolder}\out_file.docx", result);
+                    File.WriteAllBytes($@"{wordpathfolder}\out_file.docx", result);
                 else if ((PathRadio.IsChecked == true) && (!(String.IsNullOrEmpty(OutfilePathText.Text))))
-                    System.IO.File.WriteAllBytes($@"{OutfilePathText.Text}\out_file.docx", result);
+                    File.WriteAllBytes($@"{OutfilePathText.Text}\out_file.docx", result);
 
                 MessageBox.Show("Обработка успешно завершена");
             }

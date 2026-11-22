@@ -3,6 +3,7 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Text;
 
 namespace EWPFDesktop.RPC
 {
@@ -10,6 +11,7 @@ namespace EWPFDesktop.RPC
     {
         private readonly IConnectionFactory _connectionFactory;
         private readonly ConcurrentDictionary<string, TaskCompletionSource<byte[]>> _callbackMapper = new();
+        private static readonly TimeSpan ReplyTimeout = TimeSpan.FromSeconds(30);
 
         const string _queueName = "EWFileQueue";
         private string? _replyQueueName;
@@ -33,13 +35,11 @@ namespace EWPFDesktop.RPC
             {
                 string? correlationId = ea.BasicProperties.CorrelationId;
 
-                if (false == string.IsNullOrEmpty(correlationId))
-                {
-                    if (_callbackMapper.TryRemove(correlationId, out var tcs))
-                    {
+                if (false == string.IsNullOrEmpty(correlationId) && _callbackMapper.TryRemove(correlationId, out var tcs))
+                    if (ea.BasicProperties.Type == "error")
+                        tcs.TrySetException(new InvalidOperationException("Workhorse failed: " + Encoding.UTF8.GetString(ea.Body.ToArray())));
+                    else
                         tcs.TrySetResult(ea.Body.ToArray());
-                    }
-                }
 
                 return Task.CompletedTask;
             };
@@ -75,7 +75,15 @@ namespace EWPFDesktop.RPC
                 tcs.SetCanceled();
             });
 
-            return await tcs.Task;
+            try
+            {
+                return await tcs.Task.WaitAsync(ReplyTimeout, cancellationToken);
+            }
+            catch
+            {
+                _callbackMapper.TryRemove(correlationId, out _);
+                throw;
+            }
         }
 
         private static byte[] BuildEnvelope(byte[] wordBytes, byte[] excelBytes)

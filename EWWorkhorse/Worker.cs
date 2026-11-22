@@ -12,9 +12,13 @@ namespace EWWorkhorse
 {
     public class Worker : BackgroundService
     {
+        private const string _queueName = "EWFileQueue";
+        private const string _exchangeName = "EWExchange";
+        private const string _routingKey = "ew-routing-key";
+        private const string _deadLetterExchangeName = "EWFileDLX";
+        private const string _deadLetterQueueName = "EWFileDLQ";
         private readonly ILogger<Worker> _logger;
         CancellationToken _cancellationToken;
-        const string _queueName = "EWFileQueue";
 
         public Worker(ILogger<Worker> logger)
         {
@@ -32,12 +36,16 @@ namespace EWWorkhorse
                 var cnn = await factory.CreateConnectionAsync();
                 var channel = await cnn.CreateChannelAsync();
 
-                string exchangeName = "EWExchange";
-                string routingKey = "ew-routing-key";
+                await channel.ExchangeDeclareAsync(_exchangeName, ExchangeType.Direct);
+                await channel.ExchangeDeclareAsync(_deadLetterExchangeName, ExchangeType.Direct);
 
-                await channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Direct);
-                await channel.QueueDeclareAsync(_queueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
-                await channel.QueueBindAsync(_queueName, exchangeName, routingKey, arguments: null);
+                await channel.QueueDeclareAsync(_queueName, durable: false, exclusive: false, autoDelete: false,
+                    arguments: new Dictionary<string, object?> { { "x-dead-letter-exchange", _deadLetterExchangeName } });
+                await channel.QueueDeclareAsync(_deadLetterQueueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
+
+                await channel.QueueBindAsync(_queueName, _exchangeName, _routingKey, arguments: null);
+                await channel.QueueBindAsync(_deadLetterQueueName, _deadLetterExchangeName, _queueName);
+
                 await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false);
 
                 var consumer = new AsyncEventingBasicConsumer(channel);
@@ -47,18 +55,36 @@ namespace EWWorkhorse
                     Console.WriteLine("Job Received. Delivery tag: " + args.DeliveryTag);
 
                     var props = args.BasicProperties;
+
+                    if (props.ReplyTo is null)
+                    {
+                        await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: false);
+                        return;
+                    }
+
                     var replyProps = new BasicProperties { CorrelationId = props.CorrelationId };
 
                     try
                     {
                         (byte[] wordBytes, byte[] excelBytes) = ParseEnvelope(args.Body.ToArray());
                         byte[] resultBytes = Replacer.ReplaceBytes(wordBytes, excelBytes);
-                        await channel.BasicPublishAsync(string.Empty, props.ReplyTo!, true, replyProps, resultBytes);
+                        await channel.BasicPublishAsync(string.Empty, props.ReplyTo, true, replyProps, resultBytes);
                         await channel.BasicAckAsync(args.DeliveryTag, multiple: false);
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine("Unexpected error: " + ex.Message);
+
+                        try
+                        {
+                            await channel.BasicPublishAsync(string.Empty, props.ReplyTo, true, new BasicProperties { CorrelationId = props.CorrelationId, Type = "error" },
+                                Encoding.UTF8.GetBytes(ex.Message));
+                        }
+                        catch (Exception replyEx)
+                        {
+                            Console.WriteLine("Failed to send error reply: " + replyEx.Message);
+                        }
+
                         await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: false);
                     }
                 };
