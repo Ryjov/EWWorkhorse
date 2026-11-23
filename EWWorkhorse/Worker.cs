@@ -41,12 +41,12 @@ namespace EWWorkhorse
                     var cnn = await factory.CreateConnectionAsync();
                     var channel = await cnn.CreateChannelAsync();
 
-                    await channel.ExchangeDeclareAsync(_exchangeName, ExchangeType.Direct);
-                    await channel.ExchangeDeclareAsync(_deadLetterExchangeName, ExchangeType.Direct);
+                    await channel.ExchangeDeclareAsync(_exchangeName, ExchangeType.Direct, durable: true);
+                    await channel.ExchangeDeclareAsync(_deadLetterExchangeName, ExchangeType.Direct, durable: true);
 
-                    await channel.QueueDeclareAsync(_queueName, durable: false, exclusive: false, autoDelete: false,
+                    await channel.QueueDeclareAsync(_queueName, durable: true, exclusive: false, autoDelete: false,
                         arguments: new Dictionary<string, object?> { { "x-dead-letter-exchange", _deadLetterExchangeName } });
-                    await channel.QueueDeclareAsync(_deadLetterQueueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
+                    await channel.QueueDeclareAsync(_deadLetterQueueName, durable: true, exclusive: false, autoDelete: false, arguments: null);
 
                     await channel.QueueBindAsync(_queueName, _exchangeName, _routingKey, arguments: null);
                     await channel.QueueBindAsync(_deadLetterQueueName, _deadLetterExchangeName, _queueName);

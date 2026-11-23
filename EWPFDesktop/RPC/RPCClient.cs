@@ -67,7 +67,8 @@ namespace EWPFDesktop.RPC
             var props = new BasicProperties
             {
                 CorrelationId = correlationId,
-                ReplyTo = _replyQueueName
+                ReplyTo = _replyQueueName,
+                DeliveryMode = DeliveryModes.Persistent
             };
 
             var tcs = new TaskCompletionSource<byte[]>(
