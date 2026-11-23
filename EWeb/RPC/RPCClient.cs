@@ -5,7 +5,7 @@ using System.Text;
 
 namespace EWeb.RPC
 {
-    public class RPCClient
+    public class RPCClient : IHostedService, IAsyncDisposable
     {
         private readonly IConnectionFactory _connectionFactory;
         private readonly ConcurrentDictionary<string, TaskCompletionSource<byte[]>> _callbackMapper = new();
@@ -16,7 +16,7 @@ namespace EWeb.RPC
         private IConnection? _connection;
         private IChannel? _channel;
 
-        public async Task StartAsync()
+        public async Task StartAsync(CancellationToken cancellationToken)
         {
             ConnectionFactory factory = new();
             factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:1011");// add appsettings
@@ -43,6 +43,16 @@ namespace EWeb.RPC
             };
 
             var res = await _channel.BasicConsumeAsync(_replyQueueName, true, replyConsumer);
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken) => CloseAsync();
+
+        public ValueTask DisposeAsync() => new(CloseAsync());
+
+        private async Task CloseAsync()
+        {
+            if (_channel is not null) { await _channel.CloseAsync(); _channel = null; }
+            if (_connection is not null) { await _connection.CloseAsync(); _connection = null; }
         }
 
         public async Task<byte[]> CallAsync(IFormFileCollection files, CancellationToken cancellationToken = default)

@@ -18,7 +18,6 @@ namespace EWWorkhorse
         private const string _deadLetterExchangeName = "EWFileDLX";
         private const string _deadLetterQueueName = "EWFileDLQ";
         private readonly ILogger<Worker> _logger;
-        CancellationToken _cancellationToken;
 
         public Worker(ILogger<Worker> logger)
         {
@@ -27,81 +26,95 @@ namespace EWWorkhorse
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            ConnectionFactory factory = new();
-            factory.Uri = new Uri(uriString: "amqp://guest:guest@localhost:1011");
-            factory.ClientProvidedName = "Rabbit receiver";
-
-            try
+            ConnectionFactory factory = new()
             {
-                var cnn = await factory.CreateConnectionAsync();
-                var channel = await cnn.CreateChannelAsync();
+                Uri = new Uri(uriString: "amqp://guest:guest@localhost:1011"),
+                ClientProvidedName = "Rabbit receiver",
+                AutomaticRecoveryEnabled = true,
+                TopologyRecoveryEnabled = true,
+            };
 
-                await channel.ExchangeDeclareAsync(_exchangeName, ExchangeType.Direct);
-                await channel.ExchangeDeclareAsync(_deadLetterExchangeName, ExchangeType.Direct);
-
-                await channel.QueueDeclareAsync(_queueName, durable: false, exclusive: false, autoDelete: false,
-                    arguments: new Dictionary<string, object?> { { "x-dead-letter-exchange", _deadLetterExchangeName } });
-                await channel.QueueDeclareAsync(_deadLetterQueueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
-
-                await channel.QueueBindAsync(_queueName, _exchangeName, _routingKey, arguments: null);
-                await channel.QueueBindAsync(_deadLetterQueueName, _deadLetterExchangeName, _queueName);
-
-                await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false);
-
-                var consumer = new AsyncEventingBasicConsumer(channel);
-
-                consumer.ReceivedAsync += async (sender, args) =>
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try
                 {
-                    Console.WriteLine("Job Received. Delivery tag: " + args.DeliveryTag);
+                    var cnn = await factory.CreateConnectionAsync();
+                    var channel = await cnn.CreateChannelAsync();
 
-                    var props = args.BasicProperties;
+                    await channel.ExchangeDeclareAsync(_exchangeName, ExchangeType.Direct);
+                    await channel.ExchangeDeclareAsync(_deadLetterExchangeName, ExchangeType.Direct);
 
-                    if (props.ReplyTo is null)
+                    await channel.QueueDeclareAsync(_queueName, durable: false, exclusive: false, autoDelete: false,
+                        arguments: new Dictionary<string, object?> { { "x-dead-letter-exchange", _deadLetterExchangeName } });
+                    await channel.QueueDeclareAsync(_deadLetterQueueName, durable: false, exclusive: false, autoDelete: false, arguments: null);
+
+                    await channel.QueueBindAsync(_queueName, _exchangeName, _routingKey, arguments: null);
+                    await channel.QueueBindAsync(_deadLetterQueueName, _deadLetterExchangeName, _queueName);
+
+                    await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false);
+
+                    var consumer = new AsyncEventingBasicConsumer(channel);
+
+                    consumer.ReceivedAsync += async (sender, args) =>
                     {
-                        await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: false);
-                        return;
-                    }
+                        _logger.LogInformation("Job Received. Delivery tag: " + args.DeliveryTag);
 
-                    var replyProps = new BasicProperties { CorrelationId = props.CorrelationId };
+                        var props = args.BasicProperties;
 
-                    try
-                    {
-                        (byte[] wordBytes, byte[] excelBytes) = ParseEnvelope(args.Body.ToArray());
-                        byte[] resultBytes = Replacer.ReplaceBytes(wordBytes, excelBytes);
-                        await channel.BasicPublishAsync(string.Empty, props.ReplyTo, true, replyProps, resultBytes);
-                        await channel.BasicAckAsync(args.DeliveryTag, multiple: false);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine("Unexpected error: " + ex.Message);
+                        if (props.ReplyTo is null)
+                        {
+                            await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: false);
+                            return;
+                        }
+
+                        var replyProps = new BasicProperties { CorrelationId = props.CorrelationId };
 
                         try
                         {
-                            await channel.BasicPublishAsync(string.Empty, props.ReplyTo, true, new BasicProperties { CorrelationId = props.CorrelationId, Type = "error" },
-                                Encoding.UTF8.GetBytes(ex.Message));
+                            (byte[] wordBytes, byte[] excelBytes) = ParseEnvelope(args.Body.ToArray());
+                            byte[] resultBytes = Replacer.ReplaceBytes(wordBytes, excelBytes);
+                            await channel.BasicPublishAsync(string.Empty, props.ReplyTo, true, replyProps, resultBytes);
+                            await channel.BasicAckAsync(args.DeliveryTag, multiple: false);
                         }
-                        catch (Exception replyEx)
+                        catch (Exception ex)
                         {
-                            Console.WriteLine("Failed to send error reply: " + replyEx.Message);
+                            _logger.LogError("Unexpected error: " + ex.Message);
+
+                            try
+                            {
+                                await channel.BasicPublishAsync(string.Empty, props.ReplyTo, true, new BasicProperties { CorrelationId = props.CorrelationId, Type = "error" },
+                                    Encoding.UTF8.GetBytes(ex.Message));
+                            }
+                            catch (Exception replyEx)
+                            {
+                                _logger.LogError("Failed to send error reply: " + replyEx.Message);
+                            }
+
+                            await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: false);
                         }
+                    };
 
-                        await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: false);
+                    string consumerTag = await channel.BasicConsumeAsync(_queueName, false, consumer);
+
+                    _logger.LogInformation("Worker consuming from {queue}", _queueName);
+
+                    try { await Task.Delay(Timeout.Infinite, stoppingToken); }
+                    catch (OperationCanceledException) { }
+                    finally
+                    {
+                        await channel.CloseAsync();
+                        await cnn.CloseAsync();
                     }
-                };
 
-                string consumerTag = await channel.BasicConsumeAsync(_queueName, false, consumer);
-
-                try { await Task.Delay(Timeout.Infinite, stoppingToken); }
-                catch (OperationCanceledException) { }
-                finally
-                {
-                    await channel.CloseAsync();
-                    await cnn.CloseAsync();
+                    return;
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Worker failed");
+                catch (OperationCanceledException) { return; }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Worker failed");
+                    try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); }
+                    catch (OperationCanceledException) { return; }
+                }
             }
         }
         private static (byte[] wordBytes, byte[] excelBytes) ParseEnvelope(byte[] body)

@@ -1,31 +1,19 @@
-using DocumentFormat.OpenXml.Packaging;
-using DocumentFormat.OpenXml.Wordprocessing;
 using EWeb.Models;
 using EWeb.RPC;
-using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json;
-using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
 using System.Diagnostics;
-using System.IO;
-using System.Net;
-using System.Text;
-using System.Threading.Channels;
-using System.Xml;
-using System.Xml.Serialization;
 
 namespace EWeb.Controllers
 {
     public class HomeController : Controller
     {
+        private readonly RPCClient _rpcClient;
         private readonly ILogger<HomeController> _logger;
-        IWebHostEnvironment _appEnvironment;
-        CancellationToken _cancellationToken;
 
-        public HomeController(ILogger<HomeController> logger)
+        public HomeController(ILogger<HomeController> logger, RPCClient rpcClient)
         {
             _logger = logger;
+            _rpcClient = rpcClient;
         }
 
         public IActionResult Index()
@@ -36,7 +24,7 @@ namespace EWeb.Controllers
         [HttpPost]
         public async Task<IActionResult> ExecuteMerge(IFormFileCollection uploadedFiles)
         {
-            var resultBytes = await Executor.ExecuteAsync(uploadedFiles);
+            var resultBytes = await _rpcClient.CallAsync(uploadedFiles, HttpContext.RequestAborted);
 
             return File(resultBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "result.docx");
         }

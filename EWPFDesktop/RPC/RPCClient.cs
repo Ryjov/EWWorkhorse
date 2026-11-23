@@ -47,6 +47,15 @@ namespace EWPFDesktop.RPC
             var res = await _channel.BasicConsumeAsync(_replyQueueName, true, replyConsumer);
         }
 
+        public ValueTask DisposeAsync() => new(CloseAsync());
+
+        private async Task CloseAsync()
+        {
+            if (_channel is null && _connection is null) return;
+            if (_channel is not null) { await _channel.CloseAsync(); _channel = null; }
+            if (_connection is not null) { await _connection.CloseAsync(); _connection = null; }
+        }
+
         public async Task<byte[]> CallAsync(byte[] wordBytes, byte[] excelBytes, CancellationToken cancellationToken = default)
         {
             if (_channel is null)

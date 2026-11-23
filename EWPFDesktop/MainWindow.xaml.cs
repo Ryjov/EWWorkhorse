@@ -11,9 +11,6 @@ using System.Windows.Shapes;
 
 namespace ExcelToWord
 {
-    /// <summary>
-    /// Логика взаимодействия для MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
         public MainWindow()
@@ -25,9 +22,8 @@ namespace ExcelToWord
         bool availabilityTotal = false;
         OpenFileDialog ofd = new OpenFileDialog();
         OpenFolderDialog fbd = new OpenFolderDialog();
-        CancellationToken _cancellationToken;
 
-        public string wordpathfolder = " ";//лучше сохранять в папку экселя
+        public string wordpathfolder = " ";//save to excel?
         public string excelpathfolder = " ";
         private void wordpathbutton_Click(object sender, RoutedEventArgs e)
         {
@@ -60,7 +56,8 @@ namespace ExcelToWord
                 byte[] wordBytes = File.ReadAllBytes(wordpath.Text);
                 byte[] excBytes = File.ReadAllBytes(excelpath.Text);
 
-                var result = await Executor.ExecuteAsync(wordBytes, excBytes);
+                var rpcClient = await GetRpcClientAsync();
+                var result = await rpcClient.CallAsync(wordBytes, excBytes);
 
                 if (ExcelRadio.IsChecked == true)
                     File.WriteAllBytes($@"{excelpathfolder}\out_file.docx", result);
@@ -71,9 +68,9 @@ namespace ExcelToWord
 
                 MessageBox.Show("Обработка успешно завершена");
             }
-            catch
+            catch(Exception ex)
             {
-                MessageBox.Show("Во время работы программы произошла ошибка. Файлы не были обработаны");
+                MessageBox.Show("Во время работы программы произошла ошибка: " + ex.Message + "\nФайлы не были обработаны");
             }
         }
 
@@ -107,6 +104,26 @@ namespace ExcelToWord
             {
                 OutfilePathText.Text = fbd.FolderName;
             }
+        }
+
+        private RPCClient? _rpcClient;
+
+        private async Task<RPCClient> GetRpcClientAsync()
+        {
+            if (_rpcClient is null)
+            {
+                var client = new RPCClient();
+                try { await client.StartAsync(); }
+                catch { await client.DisposeAsync(); throw; }
+                _rpcClient = client;
+            }
+            return _rpcClient;
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            _ = _rpcClient?.DisposeAsync();
+            base.OnClosed(e);
         }
     }
 }
